@@ -33,7 +33,7 @@ for p in pp:
 
 predict_time = (time.time() - start)*1000
 print('-'*40)
-print('totoal time:%.3f 毫秒' % predict_time )
+print('totoal time:%.3f ms' % predict_time )
 
 if __name__ == '__main__':
     pass
