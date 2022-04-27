@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 #coding:utf-8
 
-__author__ = 'xmxoxo<xmxoxo@qq.com>'
-
 import sys
 import os
 import time
@@ -23,7 +21,6 @@ logfile = args.logfile
 
 cmd = 'python3 ECTrans_task.py --cmd=client --datafile=report/data_%s.txt --batch_size=%d' % (datafile, batch_size)
 
-# 开始计时
 start = time.time()
 pp=[]
 for i in range(n):
@@ -36,7 +33,7 @@ for p in pp:
 
 predict_time = (time.time() - start)*1000
 print('-'*40)
-print('批量测试总计用时:%.3f 毫秒' % predict_time )
+print('totoal time:%.3f 毫秒' % predict_time )
 
 if __name__ == '__main__':
     pass
