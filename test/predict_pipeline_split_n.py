@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
-__author__ = 'xmxoxo<xmxoxo@qq.com>'
 
 import argparse
 import os
@@ -37,27 +36,20 @@ warnings.filterwarnings('ignore')
 from pynvml import *
 nvmlInit()  # 初始化
 
-# from Pytorch_Memory_Utils.gpu_mem_track import MemTracker  # 引用显存跟踪代码
-# gpu_tracker = MemTracker()      # 创建显存检测对象
 
-
-# 把文本处理后发送到队列中
 def send_dat(sentences, q_text, q_result, batch_size=64, show_result=0, tmr_queue=None):
     """
-    发送数据
+    send data
     """
     start = time.time()
     print('sending text...')
-    # 句子按batch_size拆分
     total = len(sentences)
     sentlist = [sentences[i*batch_size:(i+1)*batch_size] for i in range(ceil(total/batch_size))]
-    # 发送到队列中
     for txts in sentlist:
         batch_text = get_sample(txts)
         q_text.put(batch_text)
 
     
-    # 准备接收结果
     i = 0 
     print('receive result...')
     while 1:
@@ -76,9 +68,8 @@ def send_dat(sentences, q_text, q_result, batch_size=64, show_result=0, tmr_queu
 
 def proc_encode(q_text, q_enc, model_encoder=None):
     """
-    编码器
+    encoder
     """
-    # 加载模型
     if model_encoder is None:
         print('Loading model:encoder...')
         model_encoder = make_model_encode(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
@@ -96,15 +87,14 @@ def proc_encode(q_text, q_enc, model_encoder=None):
         batch_input = torch.LongTensor(dat).to(config.device)
         del dat
         torch.cuda.empty_cache()
-        # gpu_tracker.track()                  # 开始检测    
+        # gpu_tracker.track()                  
         src_enc, src_mask = translate_encode(batch_input, model_encoder)
         # print('src_enc:',type(src_enc))
-        # gpu_tracker.track()                  # 开始检测    
         q_enc.put( (src_enc,src_mask) )
 
 def proc_decode(q_enc, q_result, model_decoder=None, model_generator=None):
     """
-    解码器
+    decoder
     """
     if model_decoder is None:
         print('Loading model:decoder,generator ...')
@@ -127,9 +117,9 @@ def proc_decode(q_enc, q_result, model_decoder=None, model_generator=None):
         src_enc = dat.clone()
         del dat
         torch.cuda.empty_cache()
-        # gpu_tracker.track()                  # 开始检测    
+        # gpu_tracker.track()                
         translation = translate_decode_split(src_enc, src_mask, model_decoder, model_generator, use_beam=True)
-        # gpu_tracker.track()                  # 开始检测    
+        # gpu_tracker.track()                
         q_result.put(translation)
 
 
@@ -152,7 +142,6 @@ if __name__ == '__main__':
     torch.manual_seed(1)
     mp.set_start_method('spawn')
 
-    # 加载数据文件
     txts = readtxt(datafile)
     if txts:
         sentences = txts.splitlines()
@@ -163,20 +152,18 @@ if __name__ == '__main__':
         sys.exit()
 
     '''
-    # GPU记录
     obj = GPU_MEM()
     obj.build()
     obj.start()
     '''
 
-    # 开始计时
     start = time.time()
     print(' NMT Task: Multi Pipelines '.center(40, '-'))
     print('total pipelines:%d' % total_pipelines)
     print('total sentences:%d' % total_sent)
 
     print('Building model...')
-    # gpu_tracker.track()                  # 开始检测
+    # gpu_tracker.track()                
     
     # 创建拆分后的模型
     model_encoder, model_decoder, model_generator = make_split_model(
@@ -186,7 +173,6 @@ if __name__ == '__main__':
     model_decoder.share_memory()
     model_generator.share_memory()
    
-    # 加载模型 
     print('Loading model...')
     model_encoder.load_state_dict(torch.load(config.model_path_encoder))
     model_decoder.load_state_dict(torch.load(config.model_path_decoder))
@@ -196,39 +182,11 @@ if __name__ == '__main__':
     model_decoder.eval()
     model_generator.eval()
     torch.cuda.empty_cache()
-    # gpu_tracker.track()                  # 开始检测
-    # 加载模型结束
-    
-    '''
-    # ----- 以下为另一种模型加载方式 -----
-    # 加载模型
-    model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
-                       config.d_model, config.d_ff, config.n_heads, config.dropout)
 
-    model.share_memory()
-    print('Loading model...')
-    model.load_state_dict(torch.load(config.model_path))
-    model.eval()
 
-    encoder = model.encoder
-    decoder = model.decoder
-    src_embed = model.src_embed
-    tgt_embed = model.tgt_embed
-    model_generator = model.generator
-
-    model_encoder = Transformer_encode(encoder, src_embed)
-    model_decoder = Transformer_decode(decoder, tgt_embed)
-    torch.cuda.empty_cache()
-    # 加载模型结束
-    '''
-    # gpu_tracker.track()                  # 开始检测
-    print('create Queue...')
-    # total_pipelines = 5
-    # 创建时间统计队列和流水线队列 
     tmr_queue = mp.Queue()   
     queue_list = []
     for i in range(total_pipelines):
-        # 流水线队列
         q_text = mp.Queue()
         q_enc = mp.Queue()
         q_result= mp.Queue()
@@ -237,7 +195,6 @@ if __name__ == '__main__':
     print('create process...')
     sub_process = []
     for i in range(total_pipelines):
-        # 流水线进程
         p_encode = mp.Process(target=proc_encode, args=(queue_list[i][0], queue_list[i][1], model_encoder))
         p_decode = mp.Process(target=proc_decode, args=(queue_list[i][1], queue_list[i][2], model_decoder, model_generator))
         sub_process.append ([p_encode, p_decode])
@@ -248,7 +205,6 @@ if __name__ == '__main__':
     print('decoder start....')
     for i in range(total_pipelines):
         sub_process[i][1].start()
-    # 计时为加载模型时间
     loadstime = (time.time() - start) * 1000
 
     print('Create sender process...')
@@ -257,7 +213,6 @@ if __name__ == '__main__':
        p_sender = mp.Process(target=send_dat, args=(sentences, queue_list[i][0], queue_list[i][2], batch_size, show_result, tmr_queue))
        sender_list.append(p_sender)
 
-    # 开始计时
     start = time.time()
     for i in range(total_pipelines):
         sender_list[i].start()
@@ -266,11 +221,9 @@ if __name__ == '__main__':
     for i in range(total_pipelines):
         sender_list[i].join()
     
-    # gpu_tracker.track()                  # 开始检测
     mem_data = []
     mem_ave, mem_max = 0,0
 
-    # 显存记录器停止并输出结果
     '''
     obj.stop()
     mem_data = obj.data
@@ -283,21 +236,17 @@ if __name__ == '__main__':
     memory = GPU_memory(0)
     predict_time = (time.time() - start) * 1000
     avetime = predict_time / total_sent
-    # 从计时队列中获取每个pipeline的运行时间
     pipe_times = []
     for i in range(total_pipelines):
         tmr = tmr_queue.get()
         pipe_times.append(tmr)
     ave_pipe_time = np.average (pipe_times)
 
-    print('加载模型用时:%.3f 毫秒' % loadstime)
+    print('load model time:%.3f 毫秒' % loadstime)
     print('Used Memory:%d MB' % memory)
-    print('预测总计用时:%.3f 毫秒' % predict_time)
-    print('预测单句用时:%.3f 毫秒' % avetime)
-    print('Pipeline用时(毫秒):%s ' % pipe_times)
-    print('Pipeline平均用时:%.3f 毫秒' % ave_pipe_time)
-    print('平均单句用时:%.3f 毫秒' % (ave_pipe_time / total_sent))
-    print('任务总计用时:%.3f 毫秒' % (predict_time + loadstime) )
+    print('predict time:%.3f 毫秒' % predict_time)
+    print('predict sentence time:%.3f 毫秒' % avetime)
+    print('Pipeline time ms:%s ' % pipe_times)
 
     result = {'name':'Multi Pipeline', 'total_pipelines': total_pipelines, 
                 'total_sent':total_sent,'memory':memory, 
@@ -307,7 +256,6 @@ if __name__ == '__main__':
                 'mem data':mem_data, 'mem_ave':mem_ave, 'mem_max':mem_max
              }
 
-    # 追加到日志文件
     savetofile(json.dumps(result), logfile)
 
     for i in range(total_pipelines):
